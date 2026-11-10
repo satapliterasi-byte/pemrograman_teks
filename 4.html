@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEVEL 4</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #202020;
+    color: white;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#game {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+#boardArea {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #181818;
+}
+
+#board {
+    width: min(80vh, 80vw);
+    height: min(80vh, 80vw);
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    border: 4px solid #555;
+    background: #aaa;
+}
+
+.cell {
+    border: 1px solid #777;
+    background: #d0d0d0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.wall {
+    background: #333;
+}
+
+.target {
+    background: #35b94b;
+}
+
+            .robot {
+                width: 65%;
+                height: 65%;
+                border-radius: 12%;
+                position: relative;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                transition: transform 0.15s ease;
+                z-index: 2;
+            }
+
+            .robot::after {
+                content: "";
+                position: absolute;
+                width: 0;
+                height: 0;
+                border-left: 10px solid transparent;
+                border-right: 10px solid transparent;
+                border-bottom: 20px solid rgb(255, 0, 0);
+                top: 0px;
+            }
+
+
+.cell {
+    position: relative;
+}
+
+.beacon {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: blue;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.robot {
+    position: relative;
+    z-index: 2;
+}
+
+
+/* =========================
+   EDITOR
+========================= */
+
+#side {
+    width: 390px;
+    background: #252525;
+    display: flex;
+    flex-direction: column;
+    border-left: 2px solid #444;
+}
+
+#title {
+    padding: 15px;
+    font-size: 22px;
+    font-weight: bold;
+    background: #303030;
+}
+
+#editor {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: none;
+    outline: none;
+    background: #111;
+    color: #eee;
+    font-family: Consolas, monospace;
+    font-size: 15px;
+    padding: 15px;
+    line-height: 1.5;
+}
+
+#buttons {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    background: #303030;
+}
+
+button {
+    flex: 1;
+    border: none;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+#runBtn {
+    background: #35b94b;
+    color: white;
+}
+
+
+
+#resetBtn {
+    background: #777;
+    color: white;
+}
+
+button:hover {
+    filter: brightness(1.15);
+}
+
+#status {
+    padding: 8px 12px;
+    background: #181818;
+    color: #bbb;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    min-height: 35px;
+}
+
+#error {
+    color: #ff6666;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 800px) {
+    body {
+        overflow: auto;
+    }
+
+    #game {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    #boardArea {
+        height: 60vh;
+        min-height: 400px;
+    }
+
+    #side {
+        width: 100%;
+        height: 40vh;
+        min-height: 350px;
+    }
+}
+</style>
+
+</head>
+<body>
+
+<div id="game">
+    <div id="boardArea">
+        <div id="board"></div>
+    </div>
+    <div id="side">
+        <div id="title">
+           LEVEL 4
+        </div>
+            <textarea id="editor">Tulis Kode Kamu Disini</textarea>
+
+        <div id="status">
+            Ready
+        </div>
+
+        <div id="buttons">
+            <button id="runBtn">Run</button>
+
+            <button id="resetBtn">Reset</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+
+/* =========================================================
+   GAME SETTINGS
+========================================================= */
+
+const LEVEL_REQUIREMENT = {
+    requireRepeat: true,
+    requireIf: false,
+    requireAnd: false
+};
+
+const BOARD_SIZE = 10;
+
+const START_ROBOT = {
+    x: 0,
+    y: 9,
+    direction: 0
+};
+
+const TARGET = {
+    x: 9,
+    y: 0
+};
+
+/*
+    Direction:
+
+    0 = North
+    1 = East
+    2 = South
+    3 = Westse
+*/
+
+const DIRECTION_NAMES = [
+    "North",
+    "East",
+    "South",
+    "West"
+];
+
+/*
+    Walls
+*/
+
+const walls = new Set([
+    "1,7", "2,6", "3,5","0,8",
+    "4,4","5,3","6,2","7,1","8,0",
+    "2,9","3,8","4,7","5,6","6,5","7,4","8,3","9,2",
+]);
+
+
+
+const MOVE_DELAY = 400;
+
+const MAX_STEPS = 10000;
+const MAX_NESTING = 50;
+
+const NEXT_LEVEL_URL = "5.html";
+
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+
+let robot = {
+    x: START_ROBOT.x,
+    y: START_ROBOT.y,
+    direction: START_ROBOT.direction
+};
+
+let running = false;
+
+let executionId = 0;
+
+let targetReached = false;
+
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const board = document.getElementById("board");
+const editor = document.getElementById("editor");
+const status = document.getElementById("status");
+
+const runBtn = document.getElementById("runBtn");
+
+const resetBtn = document.getElementById("resetBtn");
+
+
+/* =========================================================
+   BOARD
+========================================================= */
+
+function drawBoard() {
+
+    board.innerHTML = "";
+
+    for (let y = 0; y < BOARD_SIZE; y++) {
+
+        for (let x = 0; x < BOARD_SIZE; x++) {
+
+            const cell = document.createElement("div");
+
+            cell.className = "cell";
+
+            const key = `${x},${y}`;
+
+            if (walls.has(key)) {
+                cell.classList.add("wall");
+            }
+
+            if (x === TARGET.x && y === TARGET.y) {
+                cell.classList.add("target");
+            }
+
+            if (x === robot.x && y === robot.y) {
+
+                const robotElement =
+                    document.createElement("div");
+
+                robotElement.className = "robot";
+
+                /*
+                    Robot points north by default.
+                    Rotate according to direction.
+                */
+
+                robotElement.style.transform =
+                    `rotate(${robot.direction * 90}deg)`;
+
+                cell.appendChild(robotElement);
+            }
+
+            board.appendChild(cell);
+        }
+    }
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+function setStatus(text) {
+    status.innerHTML = text;
+}
+
+
+/* =========================================================
+   POSITION / SENSOR HELPERS
+========================================================= */
+
+function getDirectionVector(direction) {
+
+    switch (direction) {
+
+        case 0:
+            return { dx: 0, dy: -1 };
+
+        case 1:
+            return { dx: 1, dy: 0 };
+
+        case 2:
+            return { dx: 0, dy: 1 };
+
+        case 3:
+            return { dx: -1, dy: 0 };
+    }
+}
+
+
+function isInsideBoard(x, y) {
+
+    return (
+        x >= 0 &&
+        x < BOARD_SIZE &&
+        y >= 0 &&
+        y < BOARD_SIZE
+    );
+}
+
+
+function isBlocked(x, y) {
+
+    if (!isInsideBoard(x, y)) {
+        return true;
+    }
+
+    return walls.has(`${x},${y}`);
+}
+
+
+function isClearInDirection(direction) {
+
+    const vector =
+        getDirectionVector(direction);
+
+    const nextX = robot.x + vector.dx;
+    const nextY = robot.y + vector.dy;
+
+    return !isBlocked(nextX, nextY);
+}
+
+
+/* =========================================================
+   SENSORS
+========================================================= */
+
+function frontIsClear() {
+
+    return isClearInDirection(
+        robot.direction
+    );
+}
+
+
+function frontIsBlocked() {
+
+    return !frontIsClear();
+}
+
+
+function leftIsClear() {
+
+    const leftDirection =
+        (robot.direction + 3) % 4;
+
+    return isClearInDirection(
+        leftDirection
+    );
+}
+
+
+function rightIsClear() {
+
+    const rightDirection =
+        (robot.direction + 1) % 4;
+
+    return isClearInDirection(
+        rightDirection
+    );
+}
+
+
+function atTarget() {
+
+    return (
+        robot.x === TARGET.x &&
+        robot.y === TARGET.y
+    );
+}
+
+
+/* =========================================================
+   TARGET
+========================================================= */
+
+
+
+function checkLevelRequirement(program) {
+
+    let hasRepeat = false;
+    let hasIf = false;
+    let hasAndInsideIf = false;
+
+    function conditionContainsAnd(condition) {
+
+        if (!condition) {
+            return false;
+        }
+
+        if (condition.type === "and") {
+            return true;
+        }
+
+        if (
+            condition.type === "or"
+        ) {
+            return (
+                conditionContainsAnd(condition.left) ||
+                conditionContainsAnd(condition.right)
+            );
+        }
+
+        if (condition.type === "not") {
+            return conditionContainsAnd(condition.value);
+        }
+
+        return false;
+    }
+
+    function scanCommands(commands) {
+
+        for (const command of commands) {
+
+            if (command.type === "repeat") {
+
+                hasRepeat = true;
+
+                scanCommands(command.body);
+            }
+
+            else if (command.type === "if") {
+
+                hasIf = true;
+
+                if (
+                    conditionContainsAnd(command.condition)
+                ) {
+                    hasAndInsideIf = true;
+                }
+
+                scanCommands(command.thenBody);
+
+                if (command.elseBody) {
+                    scanCommands(command.elseBody);
+                }
+            }
+        }
+    }
+
+    scanCommands(program.body);
+
+    if (
+        LEVEL_REQUIREMENT.requireRepeat &&
+        !hasRepeat
+    ) {
+        return {
+            valid: false,
+            message: "HARUS GUNAKAN repeat"
+        };
+    }
+
+    if (
+        LEVEL_REQUIREMENT.requireIf &&
+        !hasIf
+    ) {
+        return {
+            valid: false,
+            message: "HARUS GUNAKAN repeat"
+        };
+    }
+
+    if (
+        LEVEL_REQUIREMENT.requireAnd &&
+        !hasAndInsideIf
+    ) {
+        return {
+            valid: false,
+            message: "HARUS GUNAKAN repeat"
+        };
+    }
+
+    return {
+        valid: true,
+        message: "Requirement completed."
+    };
+}
+
+
+function checkTarget(runId) {
+
+    if (!atTarget()) {
+        return false;
+    }
+
+    if (targetReached) {
+        return true;
+    }
+
+    targetReached = true;
+
+    running = false;
+
+    executionId++;
+
+    setStatus(
+        "Target reached! Loading next level..."
+    );
+
+    setTimeout(() => {
+
+        /*
+            Only navigate if this execution
+            is still the one that reached
+            the target.
+        */
+
+        if (targetReached) {
+            window.location.href = NEXT_LEVEL_URL;
+        }
+
+    }, 1000);
+
+    return true;
+}
+
+
+/* =========================================================
+   MOVEMENT
+========================================================= */
+
+async function wait(ms, runId) {
+
+    await new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+
+    /*
+        Returning false means execution
+        has been cancelled.
+    */
+
+    return runId === executionId;
+}
+
+                                    async function forward(steps = 1, runId) {
+                                        steps = Number(steps);
+                                        if (!Number.isInteger(steps) || steps < 0) {
+                                            throw new Error("forward() requires a non-negative integer.");
+                                        }
+                                        for (let i = 0; i < steps; i++) {
+                                            if (runId !== executionId) return false;
+                                            const vector = getDirectionVector(robot.direction);
+                                            const nextX = robot.x + vector.dx;
+                                            const nextY = robot.y + vector.dy;
+                                            if (isBlocked(nextX, nextY)) {
+                                                setStatus(`MENABRAK DINDING DI (${nextX}, ${nextY}) PROGRAM DIHENTIKAN.`);
+                                                await wait(5000, runId); // Menampilkan pesan selama setengah detik (500ms)
+                                                return false; // Menghentikan program
+                                            }
+                                            robot.x = nextX;
+                                            robot.y = nextY;
+                                            drawBoard();
+                                            setStatus(`Robot: (${robot.x}, ${robot.y}) — ${DIRECTION_NAMES[robot.direction]}`);
+                                            if (!(await wait(MOVE_DELAY, runId))) return false;
+                                        }
+                                        return true;
+                                    }
+
+                                    async function backward(steps = 1, runId) {
+                                        steps = Number(steps);
+                                        if (!Number.isInteger(steps) || steps < 0) {
+                                            throw new Error("backward() requires a non-negative integer.");
+                                        }
+                                        for (let i = 0; i < steps; i++) {
+                                            if (runId !== executionId) return false;
+                                            const vector = getDirectionVector(robot.direction);
+                                            const nextX = robot.x - vector.dx;
+                                            const nextY = robot.y - vector.dy;
+                                            if (isBlocked(nextX, nextY)) {
+                                                setStatus(`MENABRAK DINDING, DI (${nextX}, ${nextY}) PROGRAM DIHENTIKAN.`);
+                                                await wait(5000, runId); // Menampilkan pesan selama setengah detik (500ms)
+                                                return false; // Menghentikan program
+                                            }
+                                            robot.x = nextX;
+                                            robot.y = nextY;
+                                            drawBoard();
+                                            setStatus(`Robot: (${robot.x}, ${robot.y}) — ${DIRECTION_NAMES[robot.direction]}`);
+                                            if (!(await wait(MOVE_DELAY, runId))) return false;
+                                        }
+                                        return true;
+                                    }
+
+
+
+async function left(steps = 1, runId) {
+
+    steps = Number(steps);
+
+    if (!Number.isInteger(steps) || steps < 0) {
+        throw new Error(
+            "left() requires a non-negative integer."
+        );
+    }
+
+    for (let i = 0; i < steps; i++) {
+
+        if (runId !== executionId) {
+            return false;
+        }
+
+        robot.direction =
+            (robot.direction + 3) % 4;
+
+        drawBoard();
+
+        setStatus(
+            `Robot: (${robot.x}, ${robot.y}) — ` +
+            `${DIRECTION_NAMES[robot.direction]}`
+        );
+
+        if (!(await wait(MOVE_DELAY, runId))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+async function right(steps = 1, runId) {
+
+    steps = Number(steps);
+
+    if (!Number.isInteger(steps) || steps < 0) {
+        throw new Error(
+            "right() requires a non-negative integer."
+        );
+    }
+
+    for (let i = 0; i < steps; i++) {
+
+        if (runId !== executionId) {
+            return false;
+        }
+
+        robot.direction =
+            (robot.direction + 1) % 4;
+
+        drawBoard();
+
+        setStatus(
+            `Robot: (${robot.x}, ${robot.y}) — ` +
+            `${DIRECTION_NAMES[robot.direction]}`
+        );
+
+        if (!(await wait(MOVE_DELAY, runId))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+/* =========================================================
+   TOKENIZER
+========================================================= */
+
+function tokenize(source) {
+
+    const tokens = [];
+
+    let i = 0;
+
+    while (i < source.length) {
+
+        const char = source[i];
+
+        /*
+            Ignore whitespace
+        */
+
+        if (/\s/.test(char)) {
+            i++;
+            continue;
+        }
+
+        /*
+            Comments
+        */
+
+        if (
+            char === "/" &&
+            source[i + 1] === "/"
+        ) {
+
+            i += 2;
+
+            while (
+                i < source.length &&
+                source[i] !== "\n"
+            ) {
+                i++;
+            }
+
+            continue;
+        }
+
+        /*
+            Two-character operators
+        */
+
+        const two =
+            source.slice(i, i + 2);
+
+        if (
+            two === "&&" ||
+            two === "||"
+        ) {
+
+            tokens.push(two);
+            i += 2;
+            continue;
+        }
+
+        /*
+            Numbers
+        */
+
+        if (/[0-9]/.test(char)) {
+
+            let number = "";
+
+            while (
+                i < source.length &&
+                /[0-9]/.test(source[i])
+            ) {
+
+                number += source[i];
+                i++;
+            }
+
+            tokens.push({
+                type: "number",
+                value: Number(number)
+            });
+
+            continue;
+        }
+
+        /*
+            Names
+        */
+
+        if (/[A-Za-z_]/.test(char)) {
+
+            let name = "";
+
+            while (
+                i < source.length &&
+                /[A-Za-z0-9_]/.test(source[i])
+            ) {
+
+                name += source[i];
+                i++;
+            }
+
+            tokens.push({
+                type: "name",
+                value: name
+            });
+
+            continue;
+        }
+
+        /*
+            Single-character symbols
+        */
+
+        if (
+            "(){}!,"
+                .includes(char)
+        ) {
+
+            tokens.push(char);
+            i++;
+            continue;
+        }
+
+        throw new Error(
+            `Unexpected character: "${char}"`
+        );
+    }
+
+    tokens.push("EOF");
+
+    return tokens;
+}
+
+
+/* =========================================================
+   PARSER
+========================================================= */
+
+class Parser {
+
+    constructor(tokens) {
+
+        this.tokens = tokens;
+        this.position = 0;
+    }
+
+
+    current() {
+        return this.tokens[this.position];
+    }
+
+
+    advance() {
+
+        const token =
+            this.tokens[this.position];
+
+        this.position++;
+
+        return token;
+    }
+
+
+    expect(value) {
+
+        const token =
+            this.advance();
+
+        if (
+            typeof token === "object" ||
+            token !== value
+        ) {
+
+            throw new Error(
+                `Expected "${value}".`
+            );
+        }
+
+        return token;
+    }
+
+
+    getName() {
+
+        const token =
+            this.advance();
+
+        if (
+            !token ||
+            typeof token !== "object" ||
+            token.type !== "name"
+        ) {
+
+            throw new Error(
+                "Expected a command or condition."
+            );
+        }
+
+        return token.value;
+    }
+
+
+    parseProgram() {
+
+        const commands = [];
+
+        while (this.current() !== "EOF") {
+
+            commands.push(
+                this.parseStatement()
+            );
+        }
+
+        return {
+            type: "program",
+            body: commands
+        };
+    }
+
+
+    parseStatement() {
+
+        const name = this.getName();
+
+        /*
+            repeat
+        */
+
+        if (name === "repeat") {
+
+            this.expect("(");
+
+            const numberToken =
+                this.advance();
+
+            if (
+                typeof numberToken !== "object" ||
+                numberToken.type !== "number"
+            ) {
+
+                throw new Error(
+                    "repeat() requires a number."
+                );
+            }
+
+            this.expect(")");
+
+            const body =
+                this.parseBlock();
+
+            return {
+                type: "repeat",
+                count: numberToken.value,
+                body
+            };
+        }
+
+
+        /*
+            if
+        */
+
+        if (name === "if") {
+
+            this.expect("(");
+
+            const condition =
+                this.parseCondition();
+
+            this.expect(")");
+
+            const thenBody =
+                this.parseBlock();
+
+            let elseBody = null;
+
+            if (
+                this.current() !== "EOF" &&
+                this.current() &&
+                this.current().type === "name" &&
+                this.current().value === "else"
+            ) {
+
+                this.advance();
+
+                elseBody =
+                    this.parseBlock();
+            }
+
+            return {
+                type: "if",
+                condition,
+                thenBody,
+                elseBody
+            };
+        }
+
+
+        /*
+            Movement command
+        */
+
+        if (
+            name === "forward" ||
+            name === "backward" ||
+            name === "left" ||
+            name === "right"
+        ) {
+
+            let amount = 1;
+
+            if (this.current() === "(") {
+
+                this.advance();
+
+                if (this.current() !== ")") {
+
+                    const token =
+                        this.advance();
+
+                    if (
+                        typeof token !== "object" ||
+                        token.type !== "number"
+                    ) {
+
+                        throw new Error(
+                            `${name}() requires a number.`
+                        );
+                    }
+
+                    amount = token.value;
+                }
+
+                this.expect(")");
+            }
+
+            return {
+                type: "move",
+                command: name,
+                amount
+            };
+        }
+
+
+        throw new Error(
+            `Unknown command: ${name}`
+        );
+    }
+
+
+    parseBlock() {
+
+        this.expect("{");
+
+        const body = [];
+
+        while (
+            this.current() !== "}" &&
+            this.current() !== "EOF"
+        ) {
+
+            body.push(
+                this.parseStatement()
+            );
+        }
+
+        this.expect("}");
+
+        return body;
+    }
+
+
+    /*
+        condition
+        OR
+        AND
+        NOT
+        SENSOR
+    */
+
+    parseCondition() {
+
+        return this.parseOr();
+    }
+
+
+    parseOr() {
+
+        let left =
+            this.parseAnd();
+
+        while (this.current() === "||") {
+
+            this.advance();
+
+            const right =
+                this.parseAnd();
+
+            left = {
+                type: "or",
+                left,
+                right
+            };
+        }
+
+        return left;
+    }
+
+
+    parseAnd() {
+
+        let left =
+            this.parseNot();
+
+        while (this.current() === "&&") {
+
+            this.advance();
+
+            const right =
+                this.parseNot();
+
+            left = {
+                type: "and",
+                left,
+                right
+            };
+        }
+
+        return left;
+    }
+
+
+    parseNot() {
+
+        if (this.current() === "!") {
+
+            this.advance();
+
+            return {
+                type: "not",
+                value: this.parseNot()
+            };
+        }
+
+        return this.parseConditionPrimary();
+    }
+
+
+    parseConditionPrimary() {
+
+        if (this.current() === "(") {
+
+            this.advance();
+
+            const condition =
+                this.parseCondition();
+
+            this.expect(")");
+
+            return condition;
+        }
+
+        const name =
+            this.getName();
+
+        const validSensors = [
+            "frontIsClear",
+            "frontIsBlocked",
+            "leftIsClear",
+            "rightIsClear",
+            "atTarget"
+        ];
+
+        if (!validSensors.includes(name)) {
+
+            throw new Error(
+                `Unknown sensor: ${name}`
+            );
+        }
+
+        if (this.current() === "(") {
+            this.expect("(");
+            this.expect(")");
+        }
+
+        return {
+            type: "sensor",
+            name
+        };
+    }
+}
+
+
+/* =========================================================
+   CONDITION EVALUATION
+========================================================= */
+
+function evaluateCondition(node) {
+
+    switch (node.type) {
+
+        case "sensor":
+
+            return Boolean(
+                window[node.name]()
+            );
+
+
+        case "not":
+
+            return !evaluateCondition(
+                node.value
+            );
+
+
+        case "and":
+
+            /*
+                Short-circuit evaluation.
+            */
+
+            return (
+                evaluateCondition(node.left) &&
+                evaluateCondition(node.right)
+            );
+
+
+        case "or":
+
+            return (
+                evaluateCondition(node.left) ||
+                evaluateCondition(node.right)
+            );
+
+
+        default:
+
+            throw new Error(
+                "Invalid condition."
+            );
+    }
+}
+
+
+/* =========================================================
+   INTERPRETER
+========================================================= */
+
+async function executeCommands(
+    commands,
+    runId,
+    depth = 0
+) {
+
+    if (depth > MAX_NESTING) {
+
+        throw new Error(
+            "Maximum nesting depth exceeded."
+        );
+    }
+
+    for (const command of commands) {
+
+        if (runId !== executionId) {
+            return false;
+        }
+
+        /*
+            Movement
+        */
+
+        if (command.type === "move") {
+
+            let result;
+
+            switch (command.command) {
+
+                case "forward":
+
+                    result =
+                        await forward(
+                            command.amount,
+                            runId
+                        );
+
+                    break;
+
+                case "backward":
+
+                    result =
+                        await backward(
+                            command.amount,
+                            runId
+                        );
+
+                    break;
+
+                case "left":
+
+                    result =
+                        await left(
+                            command.amount,
+                            runId
+                        );
+
+                    break;
+
+                case "right":
+
+                    result =
+                        await right(
+                            command.amount,
+                            runId
+                        );
+
+                    break;
+            }
+
+            if (result === false) {
+                return false;
+            }
+        }
+
+
+        /*
+            Repeat
+        */
+
+        else if (
+            command.type === "repeat"
+        ) {
+
+            if (
+                command.count < 0 ||
+                command.count > MAX_STEPS
+            ) {
+
+                throw new Error(
+                    "Invalid repeat count."
+                );
+            }
+
+            for (
+                let i = 0;
+                i < command.count;
+                i++
+            ) {
+
+                if (
+                    runId !== executionId
+                ) {
+                    return false;
+                }
+
+                const result =
+                    await executeCommands(
+                        command.body,
+                        runId,
+                        depth + 1
+                    );
+
+                if (result === false) {
+                    return false;
+                }
+            }
+        }
+
+
+        /*
+            If / Else
+        */
+
+        else if (
+            command.type === "if"
+        ) {
+
+            /*
+                IMPORTANT:
+
+                The condition is evaluated
+                here, during execution.
+
+                It is NOT evaluated when
+                the program is parsed.
+            */
+
+            const result =
+                evaluateCondition(
+                    command.condition
+                );
+
+            if (result) {
+
+                const success =
+                    await executeCommands(
+                        command.thenBody,
+                        runId,
+                        depth + 1
+                    );
+
+                if (!success) {
+                    return false;
+                }
+
+            } else if (
+                command.elseBody
+            ) {
+
+                const success =
+                    await executeCommands(
+                        command.elseBody,
+                        runId,
+                        depth + 1
+                    );
+
+                if (!success) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
+/* =========================================================
+   RUN PROGRAM
+========================================================= */
+
+async function runProgram() {
+
+    if (running) {
+        return;
+    }
+    resetGame();
+
+    /*
+        Cancel any previous execution.
+    */
+
+    executionId++;
+
+    const runId = executionId;
+
+    targetReached = false;
+
+    running = true;
+
+    setStatus("Parsing program...");
+
+    try {
+
+        const source =
+            editor.value;
+
+        const tokens =
+            tokenize(source);
+
+        const parser =
+            new Parser(tokens);
+
+
+
+
+const program =
+    parser.parseProgram();
+
+if (parser.current() !== "EOF") {
+
+    throw new Error(
+        "Unexpected code after program."
+    );
+}
+
+/*
+    Check the programming concepts required
+    by this level.
+*/
+
+const requirement =
+    checkLevelRequirement(program);
+
+if (!requirement.valid) {
+
+    running = false;
+
+    setStatus(
+        `<span id="error">${escapeHtml(
+            requirement.message
+        )}</span>`
+    );
+
+    return;
+}
+setStatus("Running in 1 second...");
+
+if (!(await wait(1000, runId))) {
+    return; // Menghentikan eksekusi jika pemain menekan Reset saat delay
+}
+
+
+setStatus("Running...");
+
+
+
+
+                        const success = await executeCommands(
+                            program.body,
+                            runId
+                        );
+                        if (runId !== executionId) {
+                            return;
+                        }
+                        running = false;
+                        if (success) {
+                            checkTarget();
+                        } else {
+                            setStatus("Program stopped.");
+                        }
+                        } 
+    
+    catch (error) {
+
+        if (runId !== executionId) {
+            return;
+        }
+
+        running = false;
+
+        setStatus(
+            `<span id="error">${escapeHtml(
+                error.message
+            )}</span>`
+        );
+
+        console.error(error);
+    }
+}
+
+
+/* =========================================================
+   STOP
+========================================================= */
+
+function stopProgram() {
+
+    if (!running) {
+        return;
+    }
+
+    executionId++;
+
+    running = false;
+
+    setStatus("Stopped.");
+}
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
+function resetGame() {
+
+    executionId++;
+
+    running = false;
+
+    targetReached = false;
+
+    robot = {
+        x: START_ROBOT.x,
+        y: START_ROBOT.y,
+        direction: START_ROBOT.direction
+    };
+
+    drawBoard();
+
+    setStatus("Reset.");
+}
+
+
+/* =========================================================
+   HTML ESCAPE
+========================================================= */
+
+function escapeHtml(text) {
+
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+/* =========================================================
+   BUTTON EVENTS
+========================================================= */
+
+runBtn.addEventListener(
+    "click",
+    runProgram
+);
+
+
+
+resetBtn.addEventListener(
+    "click",
+    resetGame
+);
+
+
+/* =========================================================
+   INITIAL DRAW
+========================================================= */
+
+drawBoard();
+
+setStatus(
+    `Ready — Robot at (${robot.x}, ${robot.y})`
+);
+
+</script>
+
+</body>
+</html>
